@@ -7,12 +7,14 @@ class EchoProcessor:
     def __init__(self, config: SonarConfig = SonarConfig()):
         self.cfg = config
         self.c = 343.0
-        self.max_range_m = 2.5
-        self.max_sample_delay = int((2.0 * self.max_range_m / self.c) * self.cfg.sample_rate)
+        self.max_sample_delay = int((2.0 * self.cfg.max_range_m / self.c) * self.cfg.sample_rate)
         
         self.reference_chirp = self._generate_reference_chirp()
         self.background_profile = None
-        self.alpha = 0.05
+        self.alpha = 0.08
+        
+        # Number of output distance bins sent to frontend
+        self.output_bins = 200
 
     def _generate_reference_chirp(self) -> np.ndarray:
         fs = self.cfg.sample_rate
@@ -29,34 +31,31 @@ class EchoProcessor:
         window[-edge:] = 0.5 * (1.0 - np.cos(np.linspace(np.pi, 0, edge)))
         return chirp * window
 
-    def matched_filter(self, channel_data: np.ndarray) -> np.ndarray:
-        corr = signal.correlate(channel_data.flatten(), self.reference_chirp, mode='full', method='fft')
+    def process_frame(self, audio_block: np.ndarray) -> np.ndarray:
+        flat_audio = audio_block.flatten()
+        
+        # 1. Matched filter via FFT correlation
+        corr = signal.correlate(flat_audio, self.reference_chirp, mode='full', method='fft')
         envelope = np.abs(signal.hilbert(corr)).astype(np.float32)
         
-        chirp_len = len(self.reference_chirp)
-        valid_envelope = envelope[chirp_len - 1:]
-        return valid_envelope[:self.max_sample_delay]
-
-    def process_frame(self, audio_block: np.ndarray) -> np.ndarray:
-        """Processes 1D mono audio block and subtracts direct-path speaker crosstalk."""
-        corr = self.matched_filter(audio_block)
-
-        if self.background_profile is None:
-            self.background_profile = corr.copy()
-            return np.zeros_like(corr)
-
-        # Dynamic echo extraction
-        dynamic = np.maximum(corr - self.background_profile, 0.0)
+        valid = envelope[len(self.reference_chirp) - 1: len(self.reference_chirp) - 1 + self.max_sample_delay]
         
-        # Adaptive background update
-        self.background_profile = (1.0 - self.alpha) * self.background_profile + self.alpha * corr
+        # 2. Resample to standard display resolution (200 bins)
+        indices = np.linspace(0, len(valid) - 1, self.output_bins).astype(int)
+        profile = valid[indices]
 
-        # Normalize 0.0 to 1.0
-        max_val = np.max(dynamic)
-        if max_val > 1e-5:
-            dynamic = dynamic / max_val
+        # 3. Direct-path speaker crosstalk cancellation
+        if self.background_profile is None:
+            self.background_profile = profile.copy()
+            return np.zeros(self.output_bins, dtype=np.float32)
 
-        return dynamic
+        dynamic = np.maximum(profile - self.background_profile, 0.0)
+        self.background_profile = (1.0 - self.alpha) * self.background_profile + self.alpha * profile
 
-    def sample_index_to_meters(self, index: int) -> float:
-        return (index / self.cfg.sample_rate * self.c) / 2.0
+        # 4. Normalize 0.0 to 1.0 with contrast power
+        peak = np.max(dynamic)
+        if peak > 1e-4:
+            dynamic = dynamic / peak
+            dynamic = np.power(dynamic, 1.6)
+            
+        return dynamic.astype(np.float32)

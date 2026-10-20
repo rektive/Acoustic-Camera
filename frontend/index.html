@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acoustic Imager & Waterfall Scope</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="hud">
+        <header>
+            <div class="brand">
+                <span class="indicator">●</span> ACOUSTIC SONAR SCOPE // FMCW
+            </div>
+            <div class="status-bar">
+                <span>MAX RANGE: <strong>2.5m</strong></span>
+                <span>SWEEP: <strong>18.5 - 21.5 kHz</strong></span>
+                <span id="connStatus" class="status-offline">DISCONNECTED</span>
+            </div>
+        </header>
+
+        <main class="display-grid">
+            <!-- Top Panel: Live A-Scan Oscilloscope -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span>A-SCAN ECHO AMPLITUDE (REAL-TIME REFLECTION PEAKS)</span>
+                    <span id="peakReadout">PEAK: 0.00m</span>
+                </div>
+                <canvas id="ascanCanvas" width="900" height="220"></canvas>
+            </section>
+
+            <!-- Bottom Panel: Historical Waterfall Echogram -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span>B-SCAN CONTINUOUS ECHOGRAM WATERFALL (TIME vs DISTANCE)</span>
+                    <span>HISTORY (PAST 15s)</span>
+                </div>
+                <canvas id="waterfallCanvas" width="900" height="340"></canvas>
+            </section>
+        </main>
+
+        <footer>
+            <button id="toggleBtn">CONNECT SENSORS</button>
+            <div class="instructions">
+                Wave your hand or place obstacles in front of the Fifine ME6S microphone to track physical echoes.
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
