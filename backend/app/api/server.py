@@ -7,7 +7,7 @@ from ..core.config import SonarConfig
 from ..core.audio_stream import DuplexAudioPipeline
 from ..core.canceller import EchoProcessor
 
-app = FastAPI(title="Acoustic Sonar Visualizer")
+app = FastAPI(title="Real-Time Acoustic Camera")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,13 +37,18 @@ async def sonar_stream(websocket: WebSocket):
     try:
         while True:
             raw_audio = pipeline.get_latest_rx(pri_samples)
-            frame = processor.process_frame(raw_audio)
+            ascan, image_2d = processor.process_live_frame(raw_audio)
             
-            # Send raw Float32 binary bytes over WebSocket
-            await websocket.send_bytes(frame.tobytes())
+            # Pack binary frame:
+            # 16-byte aligned header: [width, height, ascan_len, 0]
+            header = np.array([processor.grid_w, processor.grid_h, processor.output_bins, 0], dtype=np.uint32)
+            
+            # Concatenate header + float32 arrays
+            payload = header.tobytes() + ascan.tobytes() + image_2d.tobytes()
+            await websocket.send_bytes(payload)
             
             # ~30 FPS loop
             await asyncio.sleep(0.033)
-            
+
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass

@@ -5,7 +5,7 @@
 }
 
 body {
-    background-color: #05080c;
+    background-color: #04070a;
     color: #00f0ff;
     font-family: "JetBrains Mono", "Courier New", monospace;
     display: flex;
@@ -15,12 +15,12 @@ body {
 }
 
 .hud {
-    width: 960px;
-    background: #0b1118;
+    width: 980px;
+    background: #090e14;
     border: 1px solid #14283b;
     border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 0 40px rgba(0, 240, 255, 0.07);
+    box-shadow: 0 0 50px rgba(0, 240, 255, 0.08);
 }
 
 header {
@@ -39,7 +39,7 @@ header {
 }
 
 .indicator {
-    color: #ff3344;
+    color: #00ffaa;
 }
 
 .status-bar {
@@ -55,14 +55,14 @@ header {
     color: #00ffaa;
 }
 
-.display-grid {
-    display: flex;
-    flex-direction: column;
+.display-container {
+    display: grid;
+    grid-template-columns: 570px 1fr;
     gap: 15px;
 }
 
-.panel {
-    background: #070c12;
+.panel-main, .panel-side {
+    background: #060b10;
     border: 1px solid #14283b;
     border-radius: 4px;
     padding: 10px;
@@ -73,45 +73,64 @@ header {
     justify-content: space-between;
     font-size: 11px;
     color: #4a779d;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-weight: 600;
 }
 
-canvas {
-    display: block;
-    width: 100%;
-    background: #030609;
-    border: 1px solid #0e1c29;
-    border-radius: 2px;
+.canvas-wrapper {
+    position: relative;
 }
 
-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 15px;
-    padding-top: 12px;
-    border-top: 1px solid #14283b;
+#image2dCanvas {
+    display: block;
+    width: 100%;
+    background: #020406;
+    border: 1px solid #0e1c29;
+}
+
+#ascanCanvas {
+    display: block;
+    width: 100%;
+    background: #020406;
+    border: 1px solid #0e1c29;
+    margin-bottom: 15px;
+}
+
+.controls-card {
+    background: #08111a;
+    border: 1px solid #14283b;
+    padding: 14px;
+    border-radius: 4px;
+    color: #8da4be;
+    font-size: 11px;
+}
+
+.controls-card h3 {
+    color: #00f0ff;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.controls-card p {
+    margin-bottom: 8px;
+    line-height: 1.5;
 }
 
 button {
-    background: #00f0ff;
-    color: #030609;
+    width: 100%;
+    padding: 11px;
+    margin-top: 10px;
+    border: none;
     font-family: inherit;
     font-weight: 700;
-    border: none;
-    padding: 10px 24px;
     border-radius: 4px;
     cursor: pointer;
-    transition: 0.2s ease;
+    background: #00f0ff;
+    color: #020406;
+    transition: 0.2s;
 }
 
 button:hover {
     background: #5cf5ff;
     box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
-}
-
-.instructions {
-    font-size: 11px;
-    color: #4a779d;
 }

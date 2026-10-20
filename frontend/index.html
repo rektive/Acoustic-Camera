@@ -3,48 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acoustic Imager & Waterfall Scope</title>
+    <title>Live 2D Acoustic Camera</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="hud">
         <header>
             <div class="brand">
-                <span class="indicator">●</span> ACOUSTIC SONAR SCOPE // FMCW
+                <span class="indicator">●</span> REAL-TIME 2D ACOUSTIC CAMERA
             </div>
             <div class="status-bar">
-                <span>MAX RANGE: <strong>2.5m</strong></span>
-                <span>SWEEP: <strong>18.5 - 21.5 kHz</strong></span>
+                <span>PLANE: <strong>1.6m × 1.8m</strong></span>
+                <span>SWEEP: <strong>3.5 - 7.5 kHz</strong></span>
                 <span id="connStatus" class="status-offline">DISCONNECTED</span>
             </div>
         </header>
 
-        <main class="display-grid">
-            <!-- Top Panel: Live A-Scan Oscilloscope -->
-            <section class="panel">
+        <main class="display-container">
+            <!-- Left Side: Live 2D Top-Down Spatial Heatmap -->
+            <section class="panel-main">
                 <div class="panel-header">
-                    <span>A-SCAN ECHO AMPLITUDE (REAL-TIME REFLECTION PEAKS)</span>
-                    <span id="peakReadout">PEAK: 0.00m</span>
+                    <span>LIVE 2D TOP-DOWN CARTESIAN ACOUSTIC VIEW</span>
+                    <span id="fpsReadout">30 FPS</span>
                 </div>
-                <canvas id="ascanCanvas" width="900" height="220"></canvas>
+                <div class="canvas-wrapper">
+                    <canvas id="image2dCanvas" width="560" height="560"></canvas>
+                </div>
             </section>
 
-            <!-- Bottom Panel: Historical Waterfall Echogram -->
-            <section class="panel">
+            <!-- Right Side: Live 1D A-Scan & Instructions -->
+            <section class="panel-side">
                 <div class="panel-header">
-                    <span>B-SCAN CONTINUOUS ECHOGRAM WATERFALL (TIME vs DISTANCE)</span>
-                    <span>HISTORY (PAST 15s)</span>
+                    <span>LIVE 1D A-SCAN REFLECTANCE</span>
                 </div>
-                <canvas id="waterfallCanvas" width="900" height="340"></canvas>
+                <canvas id="ascanCanvas" width="340" height="180"></canvas>
+
+                <div class="controls-card">
+                    <h3>LIVE OPERATION</h3>
+                    <p>Both displays update continuously in real time.</p>
+                    <p>Slide your microphone gently back and forth along your desk to synthesize aperture width and sharpen object silhouettes.</p>
+                    <button id="connectBtn">CONNECT SENSORS</button>
+                </div>
             </section>
         </main>
-
-        <footer>
-            <button id="toggleBtn">CONNECT SENSORS</button>
-            <div class="instructions">
-                Wave your hand or place obstacles in front of the Fifine ME6S microphone to track physical echoes.
-            </div>
-        </footer>
     </div>
 
     <script src="app.js"></script>

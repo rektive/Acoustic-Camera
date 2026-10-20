@@ -1,124 +1,141 @@
+// frontend/app.js
+const image2dCanvas = document.getElementById('image2dCanvas');
+const imgCtx = image2dCanvas.getContext('2d');
+
 const ascanCanvas = document.getElementById('ascanCanvas');
 const ascanCtx = ascanCanvas.getContext('2d');
 
-const waterfallCanvas = document.getElementById('waterfallCanvas');
-const wfCtx = waterfallCanvas.getContext('2d');
-
-const toggleBtn = document.getElementById('toggleBtn');
+const connectBtn = document.getElementById('connectBtn');
 const connStatus = document.getElementById('connStatus');
-const peakReadout = document.getElementById('peakReadout');
+const fpsReadout = document.getElementById('fpsReadout');
 
 let socket = null;
-const MAX_RANGE_M = 2.5;
+let lastFrameTime = performance.now();
+let frameCount = 0;
 
-// Turbo/Inferno Thermal Look-Up Table
+// Thermal colormap (Black -> Blue -> Cyan -> Yellow -> Red -> White)
 function getThermalColor(val) {
     val = Math.max(0, Math.min(1, val));
     let r, g, b;
-    if (val < 0.25) {
-        // Black to Blue
-        r = 0;
-        g = Math.floor(val * 4 * 80);
-        b = Math.floor(val * 4 * 255);
-    } else if (val < 0.5) {
-        // Blue to Cyan/Green
-        r = 0;
-        g = Math.floor(80 + (val - 0.25) * 4 * 175);
-        b = Math.floor(255 - (val - 0.25) * 4 * 100);
-    } else if (val < 0.75) {
-        // Green to Orange/Yellow
-        r = Math.floor((val - 0.5) * 4 * 255);
-        g = 255;
-        b = 0;
+    if (val < 0.2) {
+        r = 0; g = 0; b = Math.floor(val * 5 * 180);
+    } else if (val < 0.4) {
+        r = 0; g = Math.floor((val - 0.2) * 5 * 255); b = 255;
+    } else if (val < 0.7) {
+        r = Math.floor((val - 0.4) * 3.33 * 255); g = 255; b = Math.floor(255 - (val - 0.4) * 3.33 * 255);
+    } else if (val < 0.9) {
+        r = 255; g = Math.floor(255 - (val - 0.7) * 5 * 200); b = 0;
     } else {
-        // Yellow to White Hot
-        r = 255;
-        g = Math.floor(255 - (val - 0.75) * 4 * 155);
-        b = Math.floor((val - 0.75) * 4 * 255);
+        r = 255; g = 255; b = Math.floor((val - 0.9) * 10 * 255);
     }
     return [r, g, b];
+}
+
+function drawGridOverlay() {
+    const w = image2dCanvas.width;
+    const h = image2dCanvas.height;
+
+    imgCtx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+    imgCtx.lineWidth = 1;
+    imgCtx.fillStyle = '#4a779d';
+    imgCtx.font = '10px monospace';
+
+    // Depth markers (Y: 0.2m to 2.0m)
+    for (let d = 0.5; d <= 2.0; d += 0.5) {
+        const y = h - ((d - 0.2) / 1.8) * h;
+        imgCtx.beginPath();
+        imgCtx.moveTo(0, y);
+        imgCtx.lineTo(w, y);
+        imgCtx.stroke();
+        imgCtx.fillText(`Y = ${d.toFixed(1)}m`, 10, y - 4);
+    }
+
+    // Horizontal markers (X: -0.8m to +0.8m)
+    for (let x_m = -0.6; x_m <= 0.6; x_m += 0.3) {
+        const x = ((x_m + 0.8) / 1.6) * w;
+        imgCtx.beginPath();
+        imgCtx.moveTo(x, 0);
+        imgCtx.lineTo(x, h);
+        imgCtx.stroke();
+        imgCtx.fillText(`${x_m > 0 ? '+' : ''}${x_m.toFixed(1)}m`, x + 3, h - 8);
+    }
+
+    // Sensor baseline indicator
+    imgCtx.strokeStyle = '#00ffaa';
+    imgCtx.lineWidth = 3;
+    const trackStart = ((-0.2 + 0.8) / 1.6) * w;
+    const trackEnd = ((0.2 + 0.8) / 1.6) * w;
+    imgCtx.beginPath();
+    imgCtx.moveTo(trackStart, h - 2);
+    imgCtx.lineTo(trackEnd, h - 2);
+    imgCtx.stroke();
+    imgCtx.fillStyle = '#00ffaa';
+    imgCtx.fillText('BASELINE (40cm)', trackStart + 10, h - 10);
+}
+
+function renderLive2D(gridWidth, gridHeight, flatData) {
+    const w = image2dCanvas.width;
+    const h = image2dCanvas.height;
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = gridWidth;
+    offscreen.height = gridHeight;
+    const offCtx = offscreen.getContext('2d');
+    const imgData = offCtx.createImageData(gridWidth, gridHeight);
+
+    for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+            const srcIdx = (gridHeight - 1 - y) * gridWidth + x;
+            const val = flatData[srcIdx];
+            const [r, g, b] = getThermalColor(val);
+
+            const dstIdx = (y * gridWidth + x) * 4;
+            imgData.data[dstIdx + 0] = r;
+            imgData.data[dstIdx + 1] = g;
+            imgData.data[dstIdx + 2] = b;
+            imgData.data[dstIdx + 3] = val > 0.05 ? 255 : 0;
+        }
+    }
+
+    offCtx.putImageData(imgData, 0, 0);
+
+    imgCtx.fillStyle = '#020406';
+    imgCtx.fillRect(0, 0, w, h);
+    imgCtx.imageSmoothingEnabled = true;
+    imgCtx.drawImage(offscreen, 0, 0, w, h);
+
+    drawGridOverlay();
 }
 
 function drawAScan(data) {
     const w = ascanCanvas.width;
     const h = ascanCanvas.height;
 
-    ascanCtx.fillStyle = '#030609';
+    ascanCtx.fillStyle = '#020406';
     ascanCtx.fillRect(0, 0, w, h);
 
-    // Grid lines for distance markers (every 0.5 meters)
-    ascanCtx.strokeStyle = '#0e2233';
-    ascanCtx.lineWidth = 1;
-    ascanCtx.fillStyle = '#3a6688';
-    ascanCtx.font = '10px monospace';
-
-    for (let d = 0.5; d <= MAX_RANGE_M; d += 0.5) {
-        const x = (d / MAX_RANGE_M) * w;
-        ascanCtx.beginPath();
-        ascanCtx.moveTo(x, 0);
-        ascanCtx.lineTo(x, h);
-        ascanCtx.stroke();
-        ascanCtx.fillText(`${d.toFixed(1)}m`, x + 4, 14);
-    }
-
-    // Plot A-Scan line
     ascanCtx.strokeStyle = '#00f0ff';
-    ascanCtx.lineWidth = 2;
+    ascanCtx.lineWidth = 1.5;
     ascanCtx.beginPath();
-
-    let maxVal = 0;
-    let maxIdx = 0;
 
     for (let i = 0; i < data.length; i++) {
         const val = data[i];
         const x = (i / (data.length - 1)) * w;
-        const y = h - val * (h - 25) - 5;
-
+        const y = h - val * (h - 15) - 3;
         if (i === 0) ascanCtx.moveTo(x, y);
         else ascanCtx.lineTo(x, y);
-
-        if (val > maxVal) {
-            maxVal = val;
-            maxIdx = i;
-        }
     }
     ascanCtx.stroke();
-
-    // Peak distance calculation
-    if (maxVal > 0.15) {
-        const peakDist = (maxIdx / (data.length - 1)) * MAX_RANGE_M;
-        peakReadout.textContent = `PEAK: ${peakDist.toFixed(2)}m (${Math.round(maxVal * 100)}%)`;
-        peakReadout.style.color = '#00ffaa';
-    } else {
-        peakReadout.textContent = `NO TARGET`;
-        peakReadout.style.color = '#4a779d';
-    }
 }
 
-function updateWaterfall(data) {
-    const w = waterfallCanvas.width;
-    const h = waterfallCanvas.height;
-
-    // Shift existing waterfall canvas down by 2 pixels
-    wfCtx.drawImage(waterfallCanvas, 0, 0, w, h - 2, 0, 2, w, h - 2);
-
-    // Draw the latest scan line at the top
-    const imgData = wfCtx.createImageData(w, 2);
-    for (let x = 0; x < w; x++) {
-        const dataIdx = Math.floor((x / w) * data.length);
-        const val = data[dataIdx];
-        const [r, g, b] = getThermalColor(val);
-
-        // 2-pixel row
-        for (let row = 0; row < 2; row++) {
-            const pixelIdx = (row * w + x) * 4;
-            imgData.data[pixelIdx + 0] = r;
-            imgData.data[pixelIdx + 1] = g;
-            imgData.data[pixelIdx + 2] = b;
-            imgData.data[pixelIdx + 3] = 255;
-        }
+function updateFPS() {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFrameTime >= 1000) {
+        fpsReadout.textContent = `${frameCount} FPS`;
+        frameCount = 0;
+        lastFrameTime = now;
     }
-    wfCtx.putImageData(imgData, 0, 0);
 }
 
 function connect() {
@@ -128,27 +145,39 @@ function connect() {
     socket.onopen = () => {
         connStatus.textContent = 'ONLINE (STREAMING)';
         connStatus.className = 'status-online';
-        toggleBtn.textContent = 'DISCONNECT';
+        connectBtn.textContent = 'DISCONNECT';
+        drawGridOverlay();
     };
 
     socket.onmessage = (event) => {
-        // Parse raw Float32 array from WebSocket binary buffer
-        const floatData = new Float32Array(event.data);
-        drawAScan(floatData);
-        updateWaterfall(floatData);
+        const buffer = event.data;
+        const meta = new Uint32Array(buffer, 0, 4);
+        const gridW = meta[0];
+        const gridH = meta[1];
+        const ascanLen = meta[2];
+
+        // Zero-copy Float32Array slicing aligned to 4 bytes
+        const ascanData = new Float32Array(buffer, 16, ascanLen);
+        const image2dData = new Float32Array(buffer, 16 + ascanLen * 4, gridW * gridH);
+
+        drawAScan(ascanData);
+        renderLive2D(gridW, gridH, image2dData);
+        updateFPS();
     };
 
     socket.onclose = () => {
         connStatus.textContent = 'DISCONNECTED';
         connStatus.className = 'status-offline';
-        toggleBtn.textContent = 'RECONNECT';
+        connectBtn.textContent = 'CONNECT SENSORS';
     };
 }
 
-toggleBtn.addEventListener('click', () => {
+connectBtn.addEventListener('click', () => {
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.close();
     } else {
         connect();
     }
 });
+
+drawGridOverlay();
