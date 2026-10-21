@@ -1,3 +1,6 @@
+# NOTE:
+# - **New update coming up that supports Stereo Mics, and allows to get 2D image from Acoustic Camera**
+
 # Acoustic Camera
 
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
