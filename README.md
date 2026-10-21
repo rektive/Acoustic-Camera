@@ -70,7 +70,7 @@ Developed and maintained by **Nikita Zhuravlov**.
 
 ## Prerequisites
 
-- **OS**: Linux (tested on Arch Linux / PipeWire / ALSA)
+- **OS**: Linux/Windows (tested on Arch Linux / PipeWire / ALSA)
 - **Runtime**: Python 3.10+
 - **Hardware**:
   - 1x USB Microphone (e.g., Fifine AmpliGame ME6S or any mono/stereo USB condenser mic)
