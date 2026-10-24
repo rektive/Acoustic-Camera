@@ -1,69 +1,61 @@
-# backend/app/core/ring_buffer.py
+"""
+Thread-safe Circular Audio Buffer
+Author: Nikita Zhuravlov
+"""
 import threading
 import numpy as np
 
-class RingBuffer:
-    def __init__(self, capacity: int, channels: int = 1, dtype=np.float32):
+class CircularAudioBuffer:
+    def __init__(self, capacity: int, channels: int = 1):
         self.capacity = capacity
         self.channels = channels
-        self.dtype = dtype
-        self.buffer = np.zeros((capacity, channels), dtype=dtype)
-        self.write_idx = 0
-        self.read_idx = 0
-        self.size = 0
+        self.buffer = np.zeros((capacity, channels), dtype=np.float32)
+        self.write_index = 0
         self.lock = threading.Lock()
 
-    def write(self, data: np.ndarray) -> int:
-        frames = len(data)
-        if frames == 0:
-            return 0
-        
-        # Ensure 2D shape (samples, channels)
-        if data.ndim == 1:
-            data = data[:, np.newaxis]
-
+    def write(self, data: np.ndarray):
         with self.lock:
-            if frames > self.capacity:
-                data = data[-self.capacity:]
-                frames = self.capacity
+            # Handle 1D array by reshaping to (N, 1)
+            if data.ndim == 1:
+                data = data[:, np.newaxis]
+            
+            # If incoming channels differ from buffer allocation, slice or broadcast
+            if data.shape[1] != self.channels:
+                if data.shape[1] > self.channels:
+                    data = data[:, :self.channels]
+                else:
+                    data = np.repeat(data, self.channels, axis=1)
 
-            end_idx = self.write_idx + frames
-            if end_idx <= self.capacity:
-                self.buffer[self.write_idx:end_idx] = data
+            n_samples = data.shape[0]
+            if n_samples >= self.capacity:
+                self.buffer[:] = data[-self.capacity:]
+                self.write_index = 0
+                return
+
+            end_index = self.write_index + n_samples
+            if end_index <= self.capacity:
+                self.buffer[self.write_index:end_index] = data
+                self.write_index = end_index % self.capacity
             else:
-                first = self.capacity - self.write_idx
-                second = frames - first
-                self.buffer[self.write_idx:] = data[:first]
-                self.buffer[:second] = data[first:]
+                first_part = self.capacity - self.write_index
+                self.buffer[self.write_index:] = data[:first_part]
+                second_part = n_samples - first_part
+                self.buffer[:second_part] = data[first_part:]
+                self.write_index = second_part
 
-            self.write_idx = end_idx % self.capacity
-            self.size = min(self.size + frames, self.capacity)
-            return frames
-
-    def read_latest(self, num_frames: int) -> np.ndarray:
+    def read_latest(self, num_samples: int) -> np.ndarray:
         with self.lock:
-            if self.size == 0 or num_frames <= 0:
-                return np.zeros((num_frames, self.channels), dtype=self.dtype)
-
-            n = min(num_frames, self.size)
-            start_idx = (self.write_idx - n) % self.capacity
-
-            if start_idx + n <= self.capacity:
-                out = self.buffer[start_idx:start_idx + n].copy()
+            num_samples = min(num_samples, self.capacity)
+            start_index = self.write_index - num_samples
+            if start_index >= 0:
+                result = self.buffer[start_index:self.write_index].copy()
             else:
-                first = self.capacity - start_idx
-                second = n - first
-                out = np.vstack((self.buffer[start_idx:], self.buffer[:second]))
-
-            if n < num_frames:
-                pad = np.zeros((num_frames - n, self.channels), dtype=self.dtype)
-                out = np.vstack((pad, out))
-
-            return out
-
-    def clear(self):
-        with self.lock:
-            self.write_idx = 0
-            self.read_idx = 0
-            self.size = 0
-            self.buffer.fill(0)
+                result = np.vstack((
+                    self.buffer[start_index % self.capacity:],
+                    self.buffer[:self.write_index]
+                ))
+            
+            # Flatten to 1D if single-channel mono
+            if self.channels == 1:
+                return result.flatten()
+            return result

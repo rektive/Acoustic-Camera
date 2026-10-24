@@ -1,86 +1,71 @@
-# backend/app/core/audio_stream.py
-import numpy as np
+"""
+Acoustic Duplex Audio Stream Engine
+Author: Nikita Zhuravlov
+"""
 import sounddevice as sd
+import numpy as np
 from .config import SonarConfig
-from .ring_buffer import RingBuffer
+from .ring_buffer import CircularAudioBuffer
 
 class DuplexAudioPipeline:
-    def __init__(self, config: SonarConfig = SonarConfig()):
+    def __init__(self, config: SonarConfig):
         self.cfg = config
-        self.rx_buffer = RingBuffer(
-            capacity=self.cfg.ring_buffer_size, 
+        self.rx_buffer = CircularAudioBuffer(
+            capacity=self.cfg.ring_buffer_size,
             channels=self.cfg.in_channels
         )
+        self.tx_signal = self._generate_tx_frame()
+        self.tx_cursor = 0
         self.stream = None
-        self.is_running = False
-        
-        self.tx_signal = self._build_tx_sequence()
-        self.tx_pointer = 0
 
-    def _build_tx_sequence(self) -> np.ndarray:
+    def _generate_tx_frame(self) -> np.ndarray:
         fs = self.cfg.sample_rate
-        chirp_len = int(fs * self.cfg.chirp_duration)
         pri_len = int(fs * self.cfg.pulse_repetition_interval)
+        chirp_len = int(fs * self.cfg.chirp_duration)
         
         t = np.linspace(0, self.cfg.chirp_duration, chirp_len, endpoint=False)
-        freq_slope = (self.cfg.chirp_f1 - self.cfg.chirp_f0) / self.cfg.chirp_duration
-        phase = 2.0 * np.pi * (self.cfg.chirp_f0 * t + 0.5 * freq_slope * (t ** 2))
-        chirp = np.sin(phase).astype(np.float32)
+        slope = (self.cfg.chirp_f1 - self.cfg.chirp_f0) / self.cfg.chirp_duration
+        phase = 2.0 * np.pi * (self.cfg.chirp_f0 * t + 0.5 * slope * (t ** 2))
+        chirp = (np.sin(phase) * 0.75).astype(np.float32)
         
-        # Apply Tukey window to soften speaker clicks
-        window = np.ones(chirp_len, dtype=np.float32)
-        edge = int(chirp_len * 0.1)
-        window[:edge] = 0.5 * (1.0 - np.cos(np.linspace(0, np.pi, edge)))
-        window[-edge:] = 0.5 * (1.0 - np.cos(np.linspace(np.pi, 0, edge)))
-        chirp *= window
-
-        pulse = np.zeros(pri_len, dtype=np.float32)
-        pulse[:chirp_len] = chirp * 0.8
+        # Tukey edge taper
+        edge = int(chirp_len * 0.08)
+        chirp[:edge] *= 0.5 * (1.0 - np.cos(np.linspace(0, np.pi, edge)))
+        chirp[-edge:] *= 0.5 * (1.0 - np.cos(np.linspace(np.pi, 0, edge)))
         
-        # Duplicate to stereo outputs for the speaker
-        stereo_tx = np.zeros((pri_len, self.cfg.out_channels), dtype=np.float32)
+        frame = np.zeros((pri_len, self.cfg.out_channels), dtype=np.float32)
         for ch in range(self.cfg.out_channels):
-            stereo_tx[:, ch] = pulse
-            
-        return stereo_tx
+            frame[:chirp_len, ch] = chirp
+        return frame
 
-    def _audio_callback(self, indata, outdata, frames, time_info, status):
+    def _callback(self, indata, outdata, frames, time_info, status):
         self.rx_buffer.write(indata)
-
-        remaining = len(self.tx_signal) - self.tx_pointer
-        if remaining >= frames:
-            outdata[:] = self.tx_signal[self.tx_pointer:self.tx_pointer + frames]
-            self.tx_pointer = (self.tx_pointer + frames) % len(self.tx_signal)
+        
+        end_cursor = self.tx_cursor + frames
+        tx_len = len(self.tx_signal)
+        if end_cursor <= tx_len:
+            outdata[:] = self.tx_signal[self.tx_cursor:end_cursor]
+            self.tx_cursor = end_cursor % tx_len
         else:
-            outdata[:remaining] = self.tx_signal[self.tx_pointer:]
-            leftover = frames - remaining
-            outdata[remaining:] = self.tx_signal[:leftover]
-            self.tx_pointer = leftover
+            first_part = tx_len - self.tx_cursor
+            outdata[:first_part] = self.tx_signal[self.tx_cursor:]
+            second_part = frames - first_part
+            outdata[first_part:] = self.tx_signal[:second_part]
+            self.tx_cursor = second_part
 
     def start(self):
-        if self.is_running:
-            return
-
-        self.rx_buffer.clear()
-        self.tx_pointer = 0
-        
-        device_selection = (self.cfg.input_device_index, self.cfg.output_device_index)
-        
+        self.stop()
         self.stream = sd.Stream(
-            device=device_selection,
             samplerate=self.cfg.sample_rate,
             blocksize=self.cfg.buffer_frames,
+            device=(self.cfg.input_device_index, self.cfg.output_device_index),
             channels=(self.cfg.in_channels, self.cfg.out_channels),
             dtype='float32',
-            callback=self._audio_callback
+            callback=self._callback
         )
         self.stream.start()
-        self.is_running = True
 
     def stop(self):
-        if not self.is_running:
-            return
-        self.is_running = False
         if self.stream:
             self.stream.stop()
             self.stream.close()
