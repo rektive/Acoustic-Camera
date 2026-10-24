@@ -3,49 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live 2D Acoustic Camera</title>
+    <title>Acoustic Camera — Acoustic Telemetry Console</title>
     <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="hud">
-        <header>
-            <div class="brand">
-                <span class="indicator">●</span> REAL-TIME 2D ACOUSTIC CAMERA
+    <div class="viewport">
+        <!-- Minimalist System Control Bar -->
+        <header class="top-bar">
+            <div class="system-id">
+                <div class="status-pip" id="statusPip"></div>
+                <span class="system-title">ACOUSTIC CAMERA</span>
+                <span class="system-version">MK-II</span>
             </div>
-            <div class="status-bar">
-                <span>PLANE: <strong>1.6m × 1.8m</strong></span>
-                <span>SWEEP: <strong>3.5 - 7.5 kHz</strong></span>
-                <span id="connStatus" class="status-offline">DISCONNECTED</span>
+
+            <!-- Hardware Mode Selector -->
+            <div class="mode-selector">
+                <button class="mode-pill active" id="btnModeStereo">STEREO BEAMFORMER</button>
+                <button class="mode-pill" id="btnModeMono">MONO SAS</button>
+            </div>
+
+            <div class="telemetry-bar">
+                <div class="stat-group">
+                    <span class="stat-label">BANDWIDTH</span>
+                    <span class="stat-value">3.8 — 7.8 kHz</span>
+                </div>
+                <div class="stat-group">
+                    <span class="stat-label">RATE</span>
+                    <span class="stat-value" id="fpsReadout">0 FPS</span>
+                </div>
+                <button class="action-btn" id="connectBtn">CONNECT</button>
             </div>
         </header>
 
-        <main class="display-container">
-            <!-- Left Side: Live 2D Top-Down Spatial Heatmap -->
-            <section class="panel-main">
-                <div class="panel-header">
-                    <span>LIVE 2D TOP-DOWN CARTESIAN ACOUSTIC VIEW</span>
-                    <span id="fpsReadout">30 FPS</span>
+        <!-- Main Engineering Workspace -->
+        <main class="console-body">
+            <!-- 2D Spatial Heatmap Viewport -->
+            <section class="viewport-card primary-card">
+                <div class="card-bar">
+                    <div class="card-title-group">
+                        <span class="card-title">SPATIAL REFLECTANCE FIELD</span>
+                        <span class="card-subtitle" id="modeDescription">Stationary 2-Channel TDOA Beamforming</span>
+                    </div>
+                    <div class="scale-legend">
+                        <span>MIN</span>
+                        <div class="legend-gradient"></div>
+                        <span>MAX</span>
+                    </div>
                 </div>
-                <div class="canvas-wrapper">
-                    <canvas id="image2dCanvas" width="560" height="560"></canvas>
+                <div class="canvas-stage">
+                    <canvas id="image2dCanvas" width="600" height="600"></canvas>
                 </div>
             </section>
 
-            <!-- Right Side: Live 1D A-Scan & Instructions -->
-            <section class="panel-side">
-                <div class="panel-header">
-                    <span>LIVE 1D A-SCAN REFLECTANCE</span>
-                </div>
-                <canvas id="ascanCanvas" width="340" height="180"></canvas>
+            <!-- Diagnostic Sidebar -->
+            <aside class="sidebar-column">
+                <!-- 1D Instantaneous A-Scan -->
+                <section class="viewport-card auxiliary-card">
+                    <div class="card-bar">
+                        <span class="card-title">RADIAL A-SCAN ENVELOPE</span>
+                        <span class="range-indicator">2.2 m</span>
+                    </div>
+                    <div class="ascan-stage">
+                        <canvas id="ascanCanvas" width="360" height="180"></canvas>
+                    </div>
+                </section>
 
-                <div class="controls-card">
-                    <h3>LIVE OPERATION</h3>
-                    <p>Both displays update continuously in real time.</p>
-                    <p>Slide your microphone gently back and forth along your desk to synthesize aperture width and sharpen object silhouettes.</p>
-                    <button id="connectBtn">CONNECT SENSORS</button>
-                </div>
-            </section>
+                <!-- Hardware Specifications Card -->
+                <section class="viewport-card info-card">
+                    <div class="card-bar">
+                        <span class="card-title">OPERATING PROTOCOL</span>
+                    </div>
+                    <div class="details-body" id="infoText">
+                        <p><strong>Stereo Mode Active:</strong> Real-time beamforming utilizes dual capsules with inter-aural time difference (ITD) filtering. Instantaneous spatial mapping without moving the sensor.</p>
+                        <div class="metric-row">
+                            <span>APERTURE BASELINE</span>
+                            <span class="mono-stat" id="baselineStat">15.0 cm</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>GRID RESOLUTION</span>
+                            <span class="mono-stat">80 × 80 px (6,400 bins)</span>
+                        </div>
+                    </div>
+                </section>
+            </aside>
         </main>
     </div>
 
